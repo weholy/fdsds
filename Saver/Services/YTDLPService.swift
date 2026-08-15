@@ -72,17 +72,16 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
     }
     
     func fetchInfo(url: String) async throws -> MediaInfo {
-        // Fetch page to extract title and thumbnail
         var request = URLRequest(url: URL(string: url)!, timeoutInterval: 15)
         request.setValue(
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
             forHTTPHeaderField: "User-Agent"
         )
         
         let (data, _) = try await session.data(for: request)
         let html = String(data: data, encoding: .utf8) ?? ""
         
-        let title = extractMetaContent(html: html, property: "og:title") ?? extractTitle(from: html) ?? "Видео"
+        let title = extractMetaContent(html: html, property: "og:title") ?? extractTitle(from: html) ?? "Video"
         let thumbnail = extractMetaContent(html: html, property: "og:image")
         let platform = detectPlatform(from: url)
         
@@ -103,52 +102,50 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
         format: OutputFormat,
         onProgress: @escaping (Double) -> Void
     ) async throws -> URL {
-        // Step 1: Get download URL from Cobalt API
         let cobaltReq = CobaltRequest(url: url, quality: quality, format: format)
         
         var request = URLRequest(url: URL(string: cobaltAPI)!, timeoutInterval: 30)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue(
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
-            forHTTPHeaderField: "User-Agent"
-        )
+        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
         request.httpBody = try JSONEncoder().encode(cobaltReq)
         
         let (data, response) = try await session.data(for: request)
         
-        guard let httpResp = response as? HTTPURLResponse else {
-            throw SaverError.downloadFailed("Нет ответа от сервера")
+        guard let _ = response as? HTTPURLResponse else {
+            throw SaverError.downloadFailed("No server response")
         }
         
         let cobaltResp = try JSONDecoder().decode(CobaltResponse.self, from: data)
         
         guard cobaltResp.status == "redirect" || cobaltResp.status == "tunnel" || cobaltResp.status == "stream" else {
-            let errorMsg = cobaltResp.error?.code ?? "Не удалось получить ссылку для скачивания"
+            let errorMsg = cobaltResp.error?.code ?? "Could not get download URL"
             throw SaverError.downloadFailed(errorMsg)
         }
         
-        let downloadURL: String
+        let downloadURLStr: String
         if cobaltResp.status == "picker", let picker = cobaltResp.picker, !picker.isEmpty {
-            downloadURL = picker[0].url
-        } else if let url = cobaltResp.url {
-            downloadURL = url
+            downloadURLStr = picker[0].url
+        } else if let respURL = cobaltResp.url {
+            downloadURLStr = respURL
         } else {
-            throw SaverError.downloadFailed("Пустая ссылка для скачивания")
+            throw SaverError.downloadFailed("Empty download URL")
         }
         
-        // Step 2: Download the file with progress
+        guard let downloadURL = URL(string: downloadURLStr) else {
+            throw SaverError.downloadFailed("Invalid download URL")
+        }
+        
         let outputDir = outputDirectory()
         let ext = format.isAudioOnly ? format.rawValue.lowercased() : "mp4"
-        let filename = (cobaltResp.filename ?? "saver_video").trimmingCharacters(in: .whitespaces)
-        let safeFilename = filename.replacingOccurrences(of: "/", with: "_").replacingOccurrences(of: "\\", with: "_")
-        let destURL = outputDir.appendingPathComponent("\(safeFilename).\(ext)")
+        let rawName = (cobaltResp.filename ?? "saver_video").trimmingCharacters(in: .whitespaces)
+        let safeName = rawName.replacingOccurrences(of: "/", with: "_")
+        let destURL = outputDir.appendingPathComponent(safeName + "." + ext)
         
-        // Remove old file if exists
         try? FileManager.default.removeItem(at: destURL)
         
-        return try await downloadFile(from: URL(string: downloadURL)!, to: destURL, onProgress: onProgress)
+        return try await downloadFile(from: downloadURL, to: destURL, onProgress: onProgress)
     }
     
     func cancel() {
@@ -159,14 +156,12 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
     private func downloadFile(from sourceURL: URL, to destURL: URL, onProgress: @escaping (Double) -> Void) async throws -> URL {
         return try await withCheckedThrowingContinuation { continuation in
             let task = self.session.downloadTask(with: sourceURL) { tempURL, response, error in
-                DispatchQueue.main.async {
-                    self.downloadTask = nil
-                }
+                DispatchQueue.main.async { self.downloadTask = nil }
                 
                 if let error = error {
-                    let nsError = error as NSError
-                    if nsError.code == NSURLErrorCancelled {
-                        continuation.resume(throwing: SaverError.downloadFailed("Загрузка отменена"))
+                    let nsErr = error as NSError
+                    if nsErr.code == NSURLErrorCancelled {
+                        continuation.resume(throwing: SaverError.downloadFailed("Cancelled"))
                     } else {
                         continuation.resume(throwing: SaverError.downloadFailed(error.localizedDescription))
                     }
@@ -175,7 +170,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
                 
                 guard let httpResp = response as? HTTPURLResponse, (200...299).contains(httpResp.statusCode) else {
                     let code = (response as? HTTPURLResponse)?.statusCode ?? 0
-                    continuation.resume(throwing: SaverError.downloadFailed("Ошибка сервера: \(code)"))
+                    continuation.resume(throwing: SaverError.downloadFailed("Server error: \(code)"))
                     return
                 }
                 
@@ -192,51 +187,41 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
                 }
             }
             
-            // Progress tracking
-            let observation = task.progress.observe(\URLSessionTask.Progress.fractionCompleted) { progress, _ in
-                DispatchQueue.main.async {
-                    onProgress(progress.fractionCompleted)
-                }
+            let _ = task.progress.observe(\.fractionCompleted) { progress, _ in
+                DispatchQueue.main.async { onProgress(progress.fractionCompleted) }
             }
             
-            DispatchQueue.main.async {
-                self.downloadTask = task
-            }
+            DispatchQueue.main.async { self.downloadTask = task }
             task.resume()
-            
-            // Clean up observation after task finishes
-            // (continuation handles the result)
         }
     }
     
-    // MARK: - HTML Parsing Helpers
+    // MARK: - Simple HTML Parsing (no regex with quotes)
     
     private func extractMetaContent(html: String, property: String) -> String? {
-        // Try og:property first
-        let patterns = [
-            "<meta[^>]*property=\"\(property)\"[^>]*content=\"([^"]*)\"",
-            "<meta[^>]*content=\"([^"]*)\"[^>]*property=\"\(property)\"",
-            "<meta[^>]*property='\(property)'[^>]*content='([^']*)'",
-            "<meta[^>]*content='([^']*)'[^>]*property='\(property)'",
-            "<meta[^>]*name=\"\(property)\"[^>]*content=\"([^"]*)\"",
-        ]
-        for pattern in patterns {
-            if let range = html.range(of: pattern, options: .regularExpression) {
-                let match = String(html[range])
-                if let contentRange = match.range(of: "content=\"([^"]*)\"", options: .regularExpression) {
-                    let content = String(match[contentRange])
-                    if let start = content.range(of: "\"")?.upperBound,
-                       let end = content.lastIndex(of: "\"") {
-                        let result = String(content[start..<end])
-                        if !result.isEmpty { return result }
+        let lowerHTML = html.lowercased()
+        let lowerProp = property.lowercased()
+        
+        for attr in ["property", "name"] {
+            let needle = attr + "=" + "\"" + lowerProp + "\""
+            guard let tagStart = lowerHTML.range(of: needle) else { continue }
+            let afterAttr = tagStart.upperBound
+            guard let tagEnd = lowerHTML.range(of: ">", range: afterAttr) else { continue }
+            let tagContent = String(html[afterAttr..<tagEnd.upperBound])
+            
+            if let cStart = tagContent.range(of: "content=", options: .caseInsensitive) {
+                var rest = String(tagContent[cStart.upperBound...]).trimmingCharacters(in: .whitespaces)
+                if rest.hasPrefix("\"") {
+                    rest.removeFirst()
+                    if let eq = rest.firstIndex(of: "\"") {
+                        let val = String(rest[rest.startIndex..<eq]).trimmingCharacters(in: .whitespaces)
+                        if !val.isEmpty { return val }
                     }
-                }
-                if let contentRange = match.range(of: "content='([^']*)'", options: .regularExpression) {
-                    let content = String(content[contentRange])
-                    if let start = content.range(of: "'")?.upperBound,
-                       let end = content.lastIndex(of: "'") {
-                        let result = String(content[start..<end])
-                        if !result.isEmpty { return result }
+                } else if rest.hasPrefix("'") {
+                    rest.removeFirst()
+                    if let eq = rest.firstIndex(of: "'") {
+                        let val = String(rest[rest.startIndex..<eq]).trimmingCharacters(in: .whitespaces)
+                        if !val.isEmpty { return val }
                     }
                 }
             }
@@ -245,14 +230,12 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
     }
     
     private func extractTitle(from html: String) -> String? {
-        if let range = html.range(of: "<title[^>]*>([^<]*)</title>", options: .regularExpression) {
-            var title = String(html[range])
-            if let start = title.range(of: ">")?.upperBound,
-               let end = title.range(of: "</", range: start) {
-                return String(title[start..<end]).trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-        }
-        return nil
+        guard let openTag = html.range(of: "<title", options: .caseInsensitive) else { return nil }
+        let afterOpen = openTag.upperBound
+        guard let closeBracket = html.range(of: ">", range: afterOpen) else { return nil }
+        let afterBracket = closeBracket.upperBound
+        guard let closeTag = html.range(of: "</title>", options: .caseInsensitive, range: afterBracket) else { return nil }
+        return String(html[afterBracket..<closeTag.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
     private func detectPlatform(from url: String) -> String? {
@@ -382,7 +365,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
                     DispatchQueue.main.async { onProgress(progress) }
                 }
                 if line.contains("[download] Destination:") || line.contains("Merging formats into") {
-                    let parts = line.components(separatedBy: "\"")
+                    let parts = line.components(separatedBy: CharacterSet(charactersIn: "\""))
                     if let path = parts.first(where: { $0.contains(outputDir.path) }) {
                         downloadedFile = URL(fileURLWithPath: path.trimmingCharacters(in: .whitespaces))
                     }
@@ -417,7 +400,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
                     }
                 } else {
                     let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-                    let msg = String(data: errData, encoding: .utf8) ?? "Ошибка загрузки"
+                    let msg = String(data: errData, encoding: .utf8) ?? "Download error"
                     continuation.resume(throwing: SaverError.downloadFailed(msg))
                 }
             } catch {
@@ -446,7 +429,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
         let formats = (dict["formats"] as? [[String: Any]])?.compactMap { $0["ext"] as? String } ?? []
 
         return MediaInfo(
-            title: dict["title"] as? String ?? "Без названия",
+            title: dict["title"] as? String ?? "Untitled",
             thumbnailURL: dict["thumbnail"] as? String,
             duration: formatDuration(dict["duration"] as? Double),
             uploader: dict["uploader"] as? String,
@@ -478,8 +461,8 @@ enum SaverError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .downloadFailed(let msg): return msg
-        case .invalidResponse: return "Не удалось получить информацию о медиа"
-        case .fileNotFound: return "Файл не найден после загрузки"
+        case .invalidResponse: return "Failed to get media info"
+        case .fileNotFound: return "File not found after download"
         }
     }
 }

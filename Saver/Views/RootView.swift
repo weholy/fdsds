@@ -8,16 +8,16 @@ struct RootView: View {
         TabView(selection: $selectedTab) {
             HomeView()
                 .tabItem {
-                    Label("Загрузка", systemImage: "arrow.down.circle.fill")
+                    Label("Загрузка", systemImage: "arrow.down.circle")
                 }
                 .tag(0)
 
             SettingsView()
                 .tabItem {
-                    Label("Настройки", systemImage: "gearshape.fill")
+                    Label("Настройки", systemImage: "gearshape")
                 }
                 .tag(1)
         }
-        .tint(.blue)
+        .tint(.primary)
     }
 }

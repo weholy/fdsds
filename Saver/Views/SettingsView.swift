@@ -27,14 +27,14 @@ struct SettingsView: View {
             .pickerStyle(.segmented)
             .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
         } header: {
-            Label("Внешний вид", systemImage: "paintbrush.fill")
+            Label("Внешний вид", systemImage: "paintbrush")
         }
     }
 
     var defaultsSection: some View {
         Section {
             HStack {
-                Label("Качество по умолчанию", systemImage: "sparkles")
+                Label("Качество по умолчанию", systemImage: "star")
                 Spacer()
                 Picker("Качество", selection: $settings.defaultQuality) {
                     ForEach(VideoQuality.allCases) { q in
@@ -42,11 +42,11 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .tint(.blue)
+                .tint(.primary)
             }
 
             HStack {
-                Label("Формат по умолчанию", systemImage: "film.fill")
+                Label("Формат по умолчанию", systemImage: "film")
                 Spacer()
                 Picker("Формат", selection: $settings.defaultFormat) {
                     Section("Видео") {
@@ -61,13 +61,13 @@ struct SettingsView: View {
                     }
                 }
                 .pickerStyle(.menu)
-                .tint(.blue)
+                .tint(.primary)
             }
 
             Toggle(isOn: $settings.autoDownload) {
-                Label("Авто-загрузка при вставке", systemImage: "bolt.fill")
+                Label("Авто-загрузка при вставке", systemImage: "bolt")
             }
-            .tint(.blue)
+            .tint(.primary)
         } header: {
             Label("Параметры загрузки", systemImage: "slider.horizontal.3")
         }
@@ -76,14 +76,14 @@ struct SettingsView: View {
     var storageSection: some View {
         Section {
             Toggle(isOn: $settings.saveToPhotos) {
-                Label("Сохранять в Галерею", systemImage: "photo.fill")
+                Label("Сохранять в Галерею", systemImage: "photo")
             }
-            .tint(.blue)
+            .tint(.primary)
 
             Toggle(isOn: $settings.saveToFiles) {
-                Label("Сохранять в папку Saver", systemImage: "folder.fill")
+                Label("Сохранять в папку Saver", systemImage: "folder")
             }
-            .tint(.blue)
+            .tint(.primary)
 
             HStack {
                 Label("Параллельных загрузок", systemImage: "arrow.triangle.branch")
@@ -91,7 +91,7 @@ struct SettingsView: View {
                 Stepper("\(settings.concurrentDownloads)", value: $settings.concurrentDownloads, in: 1...5)
             }
         } header: {
-            Label("Хранилище", systemImage: "internaldrive.fill")
+            Label("Хранилище", systemImage: "internaldrive")
         }
     }
 
@@ -107,7 +107,7 @@ struct SettingsView: View {
                     }
             }
         } header: {
-            Label("Иконка приложения", systemImage: "app.fill")
+            Label("Иконка приложения", systemImage: "app")
         } footer: {
             Text("Иконка будет обновлена сразу после выбора")
                 .font(.caption)
@@ -162,9 +162,9 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Label("Информация", systemImage: "info.circle.fill")
+            Label("Информация", systemImage: "info.circle")
         } footer: {
-            Text("Saver v1.0.0 · Swift + yt-dlp")
+            Text("Saver v1.0.0 · Swift + Cobalt API")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
         }
@@ -184,7 +184,7 @@ struct AppIconRow: View {
                 .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .strokeBorder(isSelected ? Color.blue : Color.clear, lineWidth: 2)
+                        .strokeBorder(isSelected ? Color.primary : Color.clear, lineWidth: 2)
                 )
                 .shadow(color: .black.opacity(0.12), radius: 4, x: 0, y: 2)
 
@@ -194,8 +194,8 @@ struct AppIconRow: View {
             Spacer()
 
             if isSelected {
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(.blue)
+                Image(systemName: "checkmark.circle")
+                    .foregroundStyle(.primary)
                     .font(.title3)
                     .transition(.scale.combined(with: .opacity))
             }

@@ -88,7 +88,7 @@ struct URLInputCard: View {
                 }
             } label: {
                 Image(systemName: "doc.on.clipboard")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.secondary)
                     .frame(width: 36, height: 36)
             }
             .buttonStyle(.plain)
@@ -98,7 +98,7 @@ struct URLInputCard: View {
                 Task { await downloadManager.fetchInfo() }
             } label: {
                 Image(systemName: "arrow.right.circle.fill")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.primary)
                     .font(.title2)
                     .frame(width: 44, height: 44)
             }
@@ -109,7 +109,7 @@ struct URLInputCard: View {
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .strokeBorder(Color.blue.opacity(0.2), lineWidth: 1)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.06), radius: 8, x: 0, y: 2)
     }
@@ -119,7 +119,7 @@ struct FetchingIndicator: View {
     var body: some View {
         HStack(spacing: 12) {
             ProgressView()
-                .tint(.blue)
+                .tint(.secondary)
             Text("Получаем информацию...")
                 .foregroundStyle(.secondary)
                 .font(.subheadline)
@@ -147,7 +147,7 @@ struct MediaPreviewCard: View {
                         .fill(Color(.systemGray5))
                         .aspectRatio(16/9, contentMode: .fill)
                         .overlay(
-                            Image(systemName: "play.rectangle.fill")
+                            Image(systemName: "play.rectangle")
                                 .font(.largeTitle)
                                 .foregroundStyle(.secondary)
                         )
@@ -161,17 +161,17 @@ struct MediaPreviewCard: View {
 
                 HStack(spacing: 16) {
                     if let uploader = info.uploader {
-                        Label(uploader, systemImage: "person.fill")
+                        Label(uploader, systemImage: "person")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     if let duration = info.duration {
-                        Label(duration, systemImage: "clock.fill")
+                        Label(duration, systemImage: "clock")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
                     if let platform = info.platform {
-                        Label(platform, systemImage: "globe")
+                        Label(platform, systemImage: "link")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -198,7 +198,7 @@ struct FormatSelectorCard: View {
             VStack(spacing: 0) {
                 selectorRow(
                     title: "Качество",
-                    icon: "sparkles",
+                    icon: "star",
                     value: downloadManager.selectedQuality.rawValue
                 ) {
                     Picker("Качество", selection: $downloadManager.selectedQuality) {
@@ -207,14 +207,14 @@ struct FormatSelectorCard: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(.blue)
+                    .tint(.primary)
                 }
 
                 Divider().padding(.leading, 44)
 
                 selectorRow(
                     title: "Формат",
-                    icon: "film.fill",
+                    icon: "film",
                     value: downloadManager.selectedFormat.rawValue
                 ) {
                     Picker("Формат", selection: $downloadManager.selectedFormat) {
@@ -230,7 +230,7 @@ struct FormatSelectorCard: View {
                         }
                     }
                     .pickerStyle(.menu)
-                    .tint(.blue)
+                    .tint(.primary)
                 }
             }
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -242,7 +242,7 @@ struct FormatSelectorCard: View {
     func selectorRow<T: View>(title: String, icon: String, value: String, @ViewBuilder picker: () -> T) -> some View {
         HStack {
             Image(systemName: icon)
-                .foregroundStyle(.blue)
+                .foregroundStyle(.secondary)
                 .frame(width: 28)
             Text(title)
                 .font(.body)
@@ -271,12 +271,12 @@ struct DownloadButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                LinearGradient(colors: [.blue, Color(red: 0.2, green: 0.5, blue: 1.0)],
+                LinearGradient(colors: [Color(.label), Color(.secondaryLabel)],
                                startPoint: .leading, endPoint: .trailing)
             )
             .foregroundStyle(.white)
             .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .shadow(color: .blue.opacity(0.4), radius: 12, x: 0, y: 4)
+            .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 4)
         }
         .buttonStyle(.plain)
     }
@@ -289,17 +289,17 @@ struct DownloadProgressCard: View {
         VStack(spacing: 14) {
             HStack {
                 Image(systemName: "arrow.down.circle")
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.primary)
                 Text("Загрузка...")
                     .font(.subheadline)
                 Spacer()
                 Text("\(Int(progress * 100))%")
                     .font(.subheadline.monospacedDigit())
-                    .foregroundStyle(.blue)
+                    .foregroundStyle(.primary)
             }
 
             ProgressView(value: progress)
-                .tint(.blue)
+                .tint(.primary)
                 .scaleEffect(x: 1, y: 1.5, anchor: .center)
         }
         .padding(20)
@@ -316,7 +316,7 @@ struct CompletedCard: View {
     var body: some View {
         VStack(spacing: 16) {
             HStack {
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: "checkmark.circle")
                     .foregroundStyle(.green)
                     .font(.title2)
                 VStack(alignment: .leading, spacing: 2) {
@@ -334,19 +334,19 @@ struct CompletedCard: View {
                 Button {
                     Task { await downloadManager.saveToGallery() }
                 } label: {
-                    Label("Галерея", systemImage: "photo.fill")
+                    Label("Галерея", systemImage: "photo")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .foregroundStyle(.blue)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(.primary)
                 }
 
                 ShareLink(item: fileURL) {
                     Label("Поделиться", systemImage: "square.and.arrow.up")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .foregroundStyle(.blue)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(.primary)
                 }
 
                 Button {
@@ -355,8 +355,8 @@ struct CompletedCard: View {
                     Label("Новый", systemImage: "plus.circle")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(.blue.opacity(0.12), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-                        .foregroundStyle(.blue)
+                        .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .foregroundStyle(.primary)
                 }
             }
             .buttonStyle(.plain)
@@ -374,7 +374,7 @@ struct ErrorCard: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "exclamationmark.triangle.fill")
+            Image(systemName: "exclamationmark.triangle")
                 .foregroundStyle(.red)
             VStack(alignment: .leading, spacing: 4) {
                 Text("Ошибка")
@@ -387,7 +387,7 @@ struct ErrorCard: View {
             Button {
                 downloadManager.state = .idle
             } label: {
-                Image(systemName: "xmark.circle.fill")
+                Image(systemName: "xmark.circle")
                     .foregroundStyle(.secondary)
             }
         }

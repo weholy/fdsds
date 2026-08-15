@@ -20,11 +20,45 @@ private struct CobaltRequest: Encodable {
     let videoQuality: String
     let filenameStyle: String = "pretty"
     let downloadMode: String?
+    let audioFormat: String?
     
     init(url: String, quality: VideoQuality, format: OutputFormat) {
         self.url = url
-        self.videoQuality = quality.ytdlpFormat.contains("best") ? "1080" : quality.ytdlpFormat.filter("0123456789".contains)
-        self.downloadMode = format.isAudioOnly ? "audio" : nil
+        // Cobalt expects: "720" / "1080" / "1440" / "2160" / "4320" / "max"
+        switch quality {
+        case .best:
+            self.videoQuality = "1080"
+        case .q2160:
+            self.videoQuality = "2160"
+        case .q1440:
+            self.videoQuality = "1440"
+        case .q1080:
+            self.videoQuality = "1080"
+        case .q720:
+            self.videoQuality = "720"
+        case .q480:
+            self.videoQuality = "480"
+        case .q360:
+            self.videoQuality = "360"
+        case .q240:
+            self.videoQuality = "360"
+        case .worst:
+            self.videoQuality = "360"
+        }
+        self.downloadMode = format.isAudioOnly ? "audio" : "auto"
+        // Cobalt audio formats: "mp3", "wav", "ogg", "opus", "flac", "wav"
+        if format.isAudioOnly {
+            switch format {
+            case .mp3: self.audioFormat = "mp3"
+            case .m4a, .aac: self.audioFormat = "m4a"
+            case .wav: self.audioFormat = "wav"
+            case .flac: self.audioFormat = "flac"
+            case .ogg: self.audioFormat = "ogg"
+            default: self.audioFormat = "mp3"
+            }
+        } else {
+            self.audioFormat = nil
+        }
     }
 }
 
@@ -56,6 +90,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
         let config = URLSessionConfiguration.default
         config.timeoutIntervalForRequest = 30
         config.timeoutIntervalForResource = 600
+        config.requestCachePolicy = .reloadIgnoringLocalCacheData
         return URLSession(configuration: config)
     }()
     
@@ -74,7 +109,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
     func fetchInfo(url: String) async throws -> MediaInfo {
         var request = URLRequest(url: URL(string: url)!, timeoutInterval: 15)
         request.setValue(
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1",
             forHTTPHeaderField: "User-Agent"
         )
         
@@ -108,29 +143,52 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("application/json", forHTTPHeaderField: "Accept")
-        request.setValue("Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)", forHTTPHeaderField: "User-Agent")
+        request.setValue(
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15",
+            forHTTPHeaderField: "User-Agent"
+        )
         request.httpBody = try JSONEncoder().encode(cobaltReq)
         
         let (data, response) = try await session.data(for: request)
         
-        guard let _ = response as? HTTPURLResponse else {
+        guard let httpResp = response as? HTTPURLResponse else {
             throw SaverError.downloadFailed("No server response")
         }
         
-        let cobaltResp = try JSONDecoder().decode(CobaltResponse.self, from: data)
+        // Log raw response for debugging
+        let rawResp = String(data: data, encoding: .utf8) ?? ""
+        print("[Cobalt] HTTP \(httpResp.statusCode) response: \(rawResp.prefix(500))")
         
-        guard cobaltResp.status == "redirect" || cobaltResp.status == "tunnel" || cobaltResp.status == "stream" else {
-            let errorMsg = cobaltResp.error?.code ?? "Could not get download URL"
-            throw SaverError.downloadFailed(errorMsg)
+        guard (200...299).contains(httpResp.statusCode) else {
+            throw SaverError.downloadFailed("Server returned \(httpResp.statusCode)")
         }
         
-        let downloadURLStr: String
+        let cobaltResp: CobaltResponse
+        do {
+            cobaltResp = try JSONDecoder().decode(CobaltResponse.self, from: data)
+        } catch {
+            print("[Cobalt] JSON decode error: \(error)")
+            throw SaverError.downloadFailed("Failed to parse API response")
+        }
+        
+        print("[Cobalt] status: \(cobaltResp.status)")
+        
+        // Handle picker (multiple options) - pick first
         if cobaltResp.status == "picker", let picker = cobaltResp.picker, !picker.isEmpty {
-            downloadURLStr = picker[0].url
-        } else if let respURL = cobaltResp.url {
-            downloadURLStr = respURL
-        } else {
-            throw SaverError.downloadFailed("Empty download URL")
+            guard let downloadURL = URL(string: picker[0].url) else {
+                throw SaverError.downloadFailed("Invalid picker URL")
+            }
+            let ext = format.isAudioOnly ? "mp4" : "mp4"
+            let filename = (cobaltResp.filename ?? "saver_video").trimmingCharacters(in: .whitespaces).replacingOccurrences(of: "/", with: "_")
+            let destURL = outputDirectory().appendingPathComponent(filename + "." + ext)
+            try? FileManager.default.removeItem(at: destURL)
+            return try await downloadFile(from: downloadURL, to: destURL, onProgress: onProgress)
+        }
+        
+        // Handle redirect / tunnel / stream
+        guard let downloadURLStr = cobaltResp.url, !downloadURLStr.isEmpty else {
+            let errorCode = cobaltResp.error?.code ?? cobaltResp.status
+            throw SaverError.downloadFailed("API error: \(errorCode). Try a different URL.")
         }
         
         guard let downloadURL = URL(string: downloadURLStr) else {
@@ -163,6 +221,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
                     if nsErr.code == NSURLErrorCancelled {
                         continuation.resume(throwing: SaverError.downloadFailed("Cancelled"))
                     } else {
+                        print("[Cobalt] Download error: \(error.localizedDescription)")
                         continuation.resume(throwing: SaverError.downloadFailed(error.localizedDescription))
                     }
                     return
@@ -180,9 +239,18 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
                 }
                 
                 do {
+                    let parentDir = destURL.deletingLastPathComponent()
+                    try FileManager.default.createDirectory(at: parentDir, withIntermediateDirectories: true)
+                    
+                    if FileManager.default.fileExists(atPath: destURL.path) {
+                        try FileManager.default.removeItem(at: destURL)
+                    }
+                    
                     try FileManager.default.moveItem(at: tempURL, to: destURL)
+                    print("[Cobalt] File saved to: \(destURL.path)")
                     continuation.resume(returning: destURL)
                 } catch {
+                    print("[Cobalt] File move error: \(error)")
                     continuation.resume(throwing: error)
                 }
             }
@@ -196,7 +264,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
         }
     }
     
-    // MARK: - Simple HTML Parsing (no regex with quotes)
+    // MARK: - Simple HTML Parsing
     
     private func extractMetaContent(html: String, property: String) -> String? {
         let lowerHTML = html.lowercased()
@@ -234,7 +302,7 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
         let afterOpen = openTag.upperBound
         guard let closeBracket = html.range(of: ">", range: afterOpen..<html.endIndex) else { return nil }
         let afterBracket = closeBracket.upperBound
-        guard let closeTag = html.range(of: "</title>", options: String.CompareOptions.caseInsensitive, range: afterBracket..<html.endIndex) else { return nil }
+        guard let closeTag = html.range(of: "</title>", options: .caseInsensitive, range: afterBracket..<html.endIndex) else { return nil }
         return String(html[afterBracket..<closeTag.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
@@ -248,6 +316,8 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
         if lower.contains("reddit.com") { return "Reddit" }
         if lower.contains("pinterest.") { return "Pinterest" }
         if lower.contains("twitch.tv") { return "Twitch" }
+        if lower.contains("vimeo.com") { return "Vimeo" }
+        if lower.contains("dailymotion.com") { return "Dailymotion" }
         return nil
     }
 }

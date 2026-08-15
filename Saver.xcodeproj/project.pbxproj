@@ -179,7 +179,7 @@
                                 CODE_SIGNING_REQUIRED = NO;
                                 CURRENT_PROJECT_VERSION = 1;
                                 DEVELOPMENT_TEAM = "";
-                                GENERATE_INFOPLIST_FILE = NO;
+                                GENERATE_INFOPLIST_FILE = YES;
                                 INFOPLIST_FILE = Saver/Resources/Info.plist;
                                 IPHONEOS_DEPLOYMENT_TARGET = 17.0;
                                 MARKETING_VERSION = 1.0.0;
@@ -208,7 +208,7 @@
                                 CODE_SIGNING_REQUIRED = NO;
                                 CURRENT_PROJECT_VERSION = 1;
                                 DEVELOPMENT_TEAM = "";
-                                GENERATE_INFOPLIST_FILE = NO;
+                                GENERATE_INFOPLIST_FILE = YES;
                                 INFOPLIST_FILE = Saver/Resources/Info.plist;
                                 IPHONEOS_DEPLOYMENT_TARGET = 17.0;
                                 MARKETING_VERSION = 1.0.0;

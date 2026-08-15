@@ -1,9 +1,24 @@
 import Foundation
 import Photos
 
-class YTDLPService: ObservableObject {
-    static let shared = YTDLPService()
+#if os(macOS)
+import AppKit
+private typealias PlatformPasteboard = NSPasteboard
+#else
+import UIKit
+private typealias PlatformPasteboard = UIPasteboard
+#endif
 
+protocol YTDLPServiceProtocol {
+    func fetchInfo(url: String) async throws -> MediaInfo
+    func download(url: String, quality: VideoQuality, format: OutputFormat, onProgress: @escaping (Double) -> Void) async throws -> URL
+    func cancel()
+    func outputDirectory() -> URL
+}
+
+#if os(macOS)
+class YTDLPService: ObservableObject, YTDLPServiceProtocol {
+    static let shared = YTDLPService()
     private var activeProcess: Process?
 
     var ytdlpPath: String {
@@ -195,6 +210,36 @@ class YTDLPService: ObservableObject {
         return String(format: "%d:%02d", m, sec)
     }
 }
+#else
+class YTDLPService: ObservableObject, YTDLPServiceProtocol {
+    static let shared = YTDLPService()
+
+    var ytdlpPath: String { "yt-dlp" }
+    var ffmpegPath: String { "ffmpeg" }
+
+    func outputDirectory() -> URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let saverDir = docs.appendingPathComponent("Saver", isDirectory: true)
+        try? FileManager.default.createDirectory(at: saverDir, withIntermediateDirectories: true)
+        return saverDir
+    }
+
+    func fetchInfo(url: String) async throws -> MediaInfo {
+        throw SaverError.downloadFailed("Запуск внешних процессов недоступен на iOS")
+    }
+
+    func download(
+        url: String,
+        quality: VideoQuality,
+        format: OutputFormat,
+        onProgress: @escaping (Double) -> Void
+    ) async throws -> URL {
+        throw SaverError.downloadFailed("Запуск внешних процессов недоступен на iOS")
+    }
+
+    func cancel() {}
+}
+#endif
 
 enum SaverError: LocalizedError {
     case downloadFailed(String)

@@ -12,9 +12,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: List available Xcode versions
-        run: ls /Applications/ | grep Xcode
-
       - name: Select latest Xcode
         run: |
           XCODE_PATH=$(ls -d /Applications/Xcode*.app | sort -V | tail -1)
@@ -24,6 +21,7 @@ jobs:
 
       - name: Build .app (no signing)
         run: |
+          set -eo pipefail
           xcodebuild \
             -project Saver.xcodeproj \
             -scheme Saver \
@@ -36,16 +34,23 @@ jobs:
             PRODUCT_BUNDLE_IDENTIFIER=com.seyats.saver \
             build 2>&1 | tee build.log
 
-      - name: Find .app bundle
+      - name: Verify .app bundle
         run: |
           APP_PATH=$(find DerivedData -name "Saver.app" -path "*/Build/Products/Release-iphoneos/*" | head -1)
           echo "APP_PATH=$APP_PATH" >> $GITHUB_ENV
           echo "Found app: $APP_PATH"
           if [ -z "$APP_PATH" ]; then
-            echo "ERROR: .app not found!"
-            find DerivedData -name "*.app" || true
+            echo "ERROR: .app not found in DerivedData!"
+            find DerivedData -name "*.app" 2>/dev/null || true
             exit 1
           fi
+          # Verify Info.plist exists inside the bundle
+          if [ ! -f "$APP_PATH/Info.plist" ]; then
+            echo "ERROR: Info.plist missing from .app bundle!"
+            ls -la "$APP_PATH/" || true
+            exit 1
+          fi
+          echo "Bundle size: $(du -sh "$APP_PATH" | cut -f1)"
 
       - name: Package into IPA
         run: |

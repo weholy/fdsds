@@ -206,10 +206,10 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
             let needle = attr + "=" + "\"" + lowerProp + "\""
             guard let tagStart = lowerHTML.range(of: needle) else { continue }
             let afterAttr = tagStart.upperBound
-            guard let tagEnd = lowerHTML.range(of: ">", range: afterAttr) else { continue }
+            guard let tagEnd = lowerHTML.range(of: ">", range: afterAttr..<lowerHTML.endIndex) else { continue }
             let tagContent = String(html[afterAttr..<tagEnd.upperBound])
             
-            if let cStart = tagContent.range(of: "content=", options: .caseInsensitive) {
+            if let cStart = tagContent.range(of: "content=", options: String.CompareOptions.caseInsensitive) {
                 var rest = String(tagContent[cStart.upperBound...]).trimmingCharacters(in: .whitespaces)
                 if rest.hasPrefix("\"") {
                     rest.removeFirst()
@@ -232,9 +232,9 @@ class YTDLPService: ObservableObject, YTDLPServiceProtocol {
     private func extractTitle(from html: String) -> String? {
         guard let openTag = html.range(of: "<title", options: .caseInsensitive) else { return nil }
         let afterOpen = openTag.upperBound
-        guard let closeBracket = html.range(of: ">", range: afterOpen) else { return nil }
+        guard let closeBracket = html.range(of: ">", range: afterOpen..<html.endIndex) else { return nil }
         let afterBracket = closeBracket.upperBound
-        guard let closeTag = html.range(of: "</title>", options: .caseInsensitive, range: afterBracket) else { return nil }
+        guard let closeTag = html.range(of: "</title>", options: String.CompareOptions.caseInsensitive, range: afterBracket..<html.endIndex) else { return nil }
         return String(html[afterBracket..<closeTag.lowerBound]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
     
